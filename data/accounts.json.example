@@ -1,0 +1,12 @@
+[
+  {
+    "label": "account1",
+    "initData": "tma query_id=REPLACE_WITH_YOUR_INITDATA&user=%7B%22id%22%3A12345%7D&hash=REPLACE",
+    "proxy": ""
+  },
+  {
+    "label": "account2",
+    "initData": "tma query_id=REPLACE_WITH_YOUR_INITDATA&user=%7B%22id%22%3A12346%7D&hash=REPLACE",
+    "proxy": ""
+  }
+]

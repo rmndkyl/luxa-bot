@@ -1,0 +1,14 @@
+# Credentials — NEVER commit
+data/accounts.json
+data/progress.json
+config.json
+privateKey.txt
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+logs.txt
+*.log

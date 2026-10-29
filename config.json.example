@@ -1,0 +1,12 @@
+{
+  "api_base": "https://luxaecosystem.alwaysdata.net/api",
+  "accounts": [
+    {
+      "label": "account1",
+      "initData": "tma query_id=REPLACE_WITH_YOUR_INITDATA&user=...&hash=...",
+      "proxy": ""
+    }
+  ],
+  "actions": ["state", "mining", "daily", "x", "airdrop"],
+  "interval_hours": 24
+}
