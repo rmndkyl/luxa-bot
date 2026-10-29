@@ -84,7 +84,13 @@ class LuxaClient:
         # Normalize: allow passing with or without "tma " prefix
         if not init_data.startswith("tma "):
             init_data = "tma " + init_data
-        self.auth_header = init_data
+        # URL-encode the initData payload so the Authorization header stays ASCII.
+        # Telegram's own initData contains unicode (emoji in usernames) which
+        # urllib cannot send in a latin-1 header. Encoding keeps it safe and
+        # matches what the browser sends to the TWA backend.
+        import urllib.parse as _up
+        payload = init_data[len("tma "):]
+        self.auth_header = "tma " + _up.quote(payload, safe="=&%{}:,/-_.~")
 
     def _request(self, method, path, data=None, timeout=30):
         url = API_BASE + path

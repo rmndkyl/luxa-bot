@@ -31,13 +31,27 @@ Auto-farm LUXA (Cosmos L1 chain `luxa-1`) via Telegram Mini App. Multi-account m
 
 ### 1. Get your initData (per account)
 
-1. Open **web.telegram.org** in a browser
-2. Open **@LuxaEcosystemBot** → Launch Mini App
-3. Press **F12** → **Network** tab
-4. Filter by `alwaysdata` (or `Fetch/XHR`)
-5. Click any request to `luxaecosystem.alwaysdata.net`
-6. Go to **Request Headers** → copy the **Authorization** value (starts with `tma `)
-7. It looks like: `tma query_id=AAH...&user=%7B%22id%22...&hash=abc123...`
+**Metode A — OTOMATIS dari session Telegram (recommended):**
+
+Kalau Anda sudah punya session `.session` Telegram (dari tg-airdrop-bot), initData digenerate otomatis tanpa buka browser:
+
+```bash
+# Proses semua session di folder sessions/
+python src/luxa_tg.py --api-id 2040 --api-hash YOUR_API_HASH --sessions-dir sessions/
+
+# Atau satu session saja
+python src/luxa_tg.py --api-id 2040 --api-hash YOUR_API_HASH --session path/to/account.session
+```
+
+Cara kerja: login via session → trigger Mini App launch → tangkap initData dari URL fragment → simpan ke `data/accounts.json`. initData di-refresh otomatis tiap run.
+
+**Metode B — Manual dari DevTools:**
+
+1. Buka **web.telegram.org** di browser
+2. Buka **@LuxaEcosystemBot** → Launch Mini App
+3. Tekan **F12** → **Network** tab
+4. Filter `alwaysdata` → klik request → Request Headers → salin **Authorization** (mulai `tma `)
+5. Simpan via `--add`
 
 ### 2. Install
 
@@ -110,9 +124,11 @@ python src/luxa.py --loop 4 --interval 21600
 - `config.json` — (optional) alternative config
 
 ## Troubleshooting
-- **401 Authentication required** → initData expired. Telegram initData expires after ~24h. Regenerate from DevTools.
-- **"No Telegram User"** → initData doesn't have valid user field — re-copy from Network tab.
-- **Rate limited** → add `--interval` delay between accounts.
+- **401 Authentication required** → initData expired. Telegram initData expires after ~24h. Jalankan ulang `luxa_tg.py` untuk generate segar.
+- **"latin-1 codec can't encode"** → initData berisi emoji unicode di username. Sudah di-fix otomatis (URL-encode payload). Kalau muncul lagi, regenerate initData.
+- **`BOT_APP_INVALID`** → short name salah. LUXA memakai short name **`luxa`** (BUKAN `app`). Default di script sudah benar; override dengan `--short-name luxa`.
+- **"No Telegram User"** → initData tidak punya user field valid — regenerate.
+- **Rate limited** → tambah `--interval` delay antar akun.
 
 ## Disclaimer
 - Auto-farming may violate project ToS — use at your own risk.
