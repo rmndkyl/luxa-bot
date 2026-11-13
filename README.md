@@ -123,6 +123,16 @@ python src/luxa.py --loop 4 --interval 21600
 - `data/progress.json` — farming progress
 - `config.json` — (optional) alternative config
 
+## Bukti run (dari bot sendiri, bukan mockup)
+
+![LUXA bot run](docs/screenshots/run.png)
+
+Kartu di atas dibaca langsung dari `data/last-run.txt` hasil run sungguhan: minig session dimulai,
+daily claim sukses, welcome airdrop diklaim. Satu akun saja (`acc01`, di-mask) karena LUXA
+mengandalkan `initData` mini app yang expired ~24 jam — `src/luxa_tg.py` yang meregenerasinya dari
+session Telegram sebelum run. Baris `[X] Connect your X profile` itu memang belum tertaut di akun
+ini, bukan error bot.
+
 ## Troubleshooting
 - **401 Authentication required** → initData expired. Telegram initData expires after ~24h. Jalankan ulang `luxa_tg.py` untuk generate segar.
 - **"latin-1 codec can't encode"** → initData berisi emoji unicode di username. Sudah di-fix otomatis (URL-encode payload). Kalau muncul lagi, regenerate initData.
