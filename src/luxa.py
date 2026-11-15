@@ -28,10 +28,42 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 
+from humanize import Human
+
 API_BASE = "https://luxaecosystem.alwaysdata.net/api"
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
 PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
+
+
+class RunTee:
+    """Rekam seluruh console run -> data/last-run.txt (+ .json), bahan screenshot README."""
+
+    def __init__(self, path):
+        self.path = path
+        self.json_path = os.path.join(DATA_DIR, "last-run.json")
+        self.stream = sys.stdout
+        self.buf = []
+        ensure_dirs()
+
+    def write(self, s):
+        self.stream.write(s)
+        self.buf.append(s)
+        return len(s)
+
+    def flush(self):
+        self.stream.flush()
+
+    def close(self, title, meta=None):
+        sys.stdout = self.stream
+        body = title + "\n\n" + "".join(self.buf).strip() + "\n"
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(body)
+        payload = {"title": title, "finished_at": datetime.now().isoformat(timespec="seconds")}
+        if meta:
+            payload.update(meta)
+        with open(self.json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
 
 
 def ensure_dirs():
@@ -167,6 +199,13 @@ class LuxaClient:
     def airdrop_welcome(self):
         return self.post("/airdrop/welcome")
 
+    def weekly_drop(self):
+        """Ambassador weekly drop — the only repeatable LUXA-denominated reward."""
+        return self.post("/ambassador/claim-weekly-drop")
+
+    def kyc_status(self):
+        return self.get("/ecosystem/kyc/status")
+
     def bind_wallet(self, address):
         return self.post("/ecosystem/wallet/bind", {"address": address})
 
@@ -188,94 +227,141 @@ def parse_state(data):
         active = mining.get("active", data.get("isMining", False))
     else:
         rate, active = 0, False
+    weekly = (data.get("ambassador") or {}).get("weeklyDrop") or {}
     return {
         "balance": bal,
         "shards": shards,
         "streak": streak,
         "mining_active": active,
         "mining_rate": rate,
+        "rate_hr": data.get("miningRateHr", 0),
+        "days_mined": data.get("daysMined", data.get("kycMiningDays", 0)),
+        "referrals": data.get("totalReferrals", 0),
+        "weekly_claimed": bool(weekly.get("claimedThisWeek")),
+        "weekly_amount": weekly.get("amountLuxa", 0),
+        "last_mining": data.get("lastMiningStart"),
     }
 
 
-def process_account(account, actions, sleep=1.0):
-    """Run selected actions for one account."""
+def process_account(account, actions, human=None, read_only=False):
+    """Run selected actions for one account, humanised."""
     label = account.get("label", "account")
     init_data = account.get("initData", "")
     proxy = account.get("proxy", "")
     progress = load_progress()
+    human = human or Human()
 
     if not init_data:
         print(f"  [{label}] SKIP: no initData")
-        return {"status": "skip"}
+        return {"status": "skip", "balance": 0}
 
     client = LuxaClient(init_data, proxy)
     acc_prog = progress.setdefault(label, {"total": 0, "last_run": None})
 
     print(f"\n  === {label} ===")
 
-    # 1. State (always)
+    # 1. State (always, read-only safe)
     st = client.state()
     if st.get("error"):
         print(f"    [STATE] ERR: {str(st.get('message', st))[:120]}")
         if st.get("status") == 401:
-            print(f"    [!] initData invalid/expired — regenerate")
-        return {"status": "error", "error": st.get("message", "")}
+            print("    [!] initData invalid/expired — regenerate with src/luxa_tg.py")
+        return {"status": "error", "error": st.get("message", ""), "balance": 0}
     info = parse_state(st)
-    print(f"    [STATE] balance={info['balance']} shards={info['shards']} streak={info['streak']}d mining_active={info['mining_active']} rate={info['mining_rate']}")
+    print(f"    [STATE] balance={info['balance']} shards={info['shards']} streak={info['streak']}d "
+          f"days_mined={info['days_mined']} rate_hr={info['rate_hr']} refs={info['referrals']} "
+          f"weekly={'claimed' if info['weekly_claimed'] else 'open'}")
+    if read_only:
+        return {"status": "state", **info}
 
     results = {}
+    claimed_any = False
 
-    # 2. Start mining (claim previous session + start new)
-    if "mining" in actions:
-        res = client.start_mining()
-        if res.get("success") or not res.get("error"):
-            new_bal = res.get("balance", info["balance"])
-            print(f"    [MINING] session claimed/started -> balance={new_bal}")
-            results["mining"] = "ok"
-            acc_prog["total"] = new_bal if isinstance(new_bal, (int, float)) else acc_prog.get("total", 0)
-        else:
-            msg = str(res.get("error", res.get("message", "")))[:100]
-            print(f"    [MINING] {msg}")
-            results["mining"] = msg
-        time.sleep(sleep)
+    def _gap():
+        human.sleep(human.mission_gap())
 
-    # 3. Daily bonus
-    if "daily" in actions:
-        res = client.daily_bonus()
-        if res.get("success") or not res.get("error"):
-            amt = res.get("amount", res.get("bonus", "ok"))
-            print(f"    [DAILY] claimed {amt}")
-            results["daily"] = "ok"
-        else:
-            print(f"    [DAILY] {str(res.get('error', res.get('message', '')))[:100]}")
-            results["daily"] = str(res.get("error", res.get("message", "")))[:80]
-        time.sleep(sleep)
+    for action in human.action_order(actions):
+        if action == "mining":
+            res = client.start_mining()
+            if res.get("success") or not res.get("error"):
+                new_bal = res.get("balance", info["balance"])
+                delta = res.get("reward", res.get("claimed", res.get("amount")))
+                extra = f" (reward {delta})" if delta not in (None, 0) else ""
+                print(f"    [MINING] session claimed/started -> balance={new_bal}{extra}")
+                results["mining"] = "ok"
+                claimed_any = True
+                if isinstance(new_bal, (int, float)):
+                    acc_prog["total"] = new_bal
+                    info["balance"] = new_bal
+            else:
+                msg = str(res.get("error", res.get("message", "")))[:100]
+                print(f"    [MINING] {msg}")
+                results["mining"] = msg
+            _gap()
 
-    # 4. X task reward
-    if "x" in actions:
-        res = client.claim_x_reward()
-        if res.get("success") or not res.get("error"):
-            print(f"    [X] reward claimed")
-            results["x"] = "ok"
-        else:
-            print(f"    [X] {str(res.get('error', res.get('message', '')))[:100]}")
-            results["x"] = str(res.get("error", res.get("message", "")))[:80]
-        time.sleep(sleep)
+        elif action == "daily":
+            res = client.daily_bonus()
+            if res.get("success") or not res.get("error"):
+                amt = res.get("amount", res.get("bonus", "ok"))
+                bal = res.get("balance")
+                print(f"    [DAILY] claimed {amt}" + (f" -> balance={bal}" if bal else ""))
+                results["daily"] = "ok"
+                claimed_any = True
+            else:
+                print(f"    [DAILY] {str(res.get('error', res.get('message', '')))[:100]}")
+                results["daily"] = str(res.get("error", res.get("message", "")))[:80]
+            _gap()
 
-    # 5. Airdrop campaign
-    if "airdrop" in actions:
-        res = client.airdrop_welcome()
-        if res.get("success") or not res.get("error"):
-            print(f"    [AIRDROP] welcome claimed")
-            results["airdrop"] = "ok"
-        else:
-            print(f"    [AIRDROP] {str(res.get('error', res.get('message', '')))[:100]}")
-            results["airdrop"] = str(res.get("error", res.get("message", "")))[:80]
-        time.sleep(sleep)
+        elif action == "weekly":
+            if info["weekly_claimed"]:
+                print("    [WEEKLY] already claimed this week — skip")
+                results["weekly"] = "skip"
+            else:
+                res = client.weekly_drop()
+                if res.get("success") or not res.get("error"):
+                    amt = res.get("amount", res.get("amountLuxa", info["weekly_amount"]))
+                    print(f"    [WEEKLY] claimed {amt} LUXA")
+                    results["weekly"] = "ok"
+                    claimed_any = True
+                else:
+                    print(f"    [WEEKLY] {str(res.get('error', res.get('message', '')))[:100]}")
+                    results["weekly"] = str(res.get("error", res.get("message", "")))[:80]
+                _gap()
+
+        elif action == "airdrop":
+            res = client.airdrop_welcome()
+            if res.get("success") or not res.get("error"):
+                print("    [AIRDROP] welcome claimed")
+                results["airdrop"] = "ok"
+                claimed_any = True
+            else:
+                print(f"    [AIRDROP] {str(res.get('error', res.get('message', '')))[:100]}")
+                results["airdrop"] = str(res.get("error", res.get("message", "")))[:80]
+            _gap()
+
+        elif action == "x":
+            res = client.claim_x_reward()
+            if res.get("success") or not res.get("error"):
+                print("    [X] reward claimed")
+                results["x"] = "ok"
+                claimed_any = True
+            else:
+                print(f"    [X] {str(res.get('error', res.get('message', '')))[:100]}")
+                results["x"] = str(res.get("error", res.get("message", "")))[:80]
+            _gap()
+
+    if claimed_any:
+        # Re-read so the summary shows the credited balance, not the pre-claim one.
+        st2 = client.state()
+        if not st2.get("error"):
+            info = parse_state(st2)
+            acc_prog["total"] = info["balance"]
+            print(f"    [AFTER] balance={info['balance']} shards={info['shards']} "
+                  f"days_mined={info['days_mined']} weekly={'claimed' if info['weekly_claimed'] else 'open'}")
 
     acc_prog["last_run"] = datetime.now().isoformat()
     save_progress(progress)
-    return {"status": "ok", "results": results}
+    return {"status": "ok", "results": results, **info}
 
 
 def add_account(label, init_data, proxy=""):
@@ -313,11 +399,15 @@ def main():
     parser.add_argument("--init-data", metavar="TMA", help="initData for --add (with or without 'tma ' prefix)")
     parser.add_argument("--proxy", default="", help="HTTP proxy for --add")
     parser.add_argument("--list", action="store_true", help="List accounts")
+    parser.add_argument("--status", action="store_true", help="Read-only state per account, no claims")
     parser.add_argument("--accounts", default="all", help="Comma list of labels or 'all'")
-    parser.add_argument("--actions", default="state,mining,daily,x,airdrop",
-                        help="Comma list: state,mining,daily,x,airdrop,convert")
+    parser.add_argument("--actions", default="mining,daily,airdrop,x",
+                        help="Comma list: state,mining,daily,airdrop,x,weekly (weekly = ambassador-only)")
     parser.add_argument("--loop", type=int, default=0, help="Run N times (0=once) with delay")
     parser.add_argument("--interval", type=int, default=3600, help="Seconds between loop runs")
+    parser.add_argument("--limit", type=int, default=0, help="Only the first N accounts")
+    parser.add_argument("--no-jitter", action="store_true", help="Skip the start jitter (for tests)")
+    parser.add_argument("--seed", type=int, default=None, help="Deterministic RNG (for tests)")
     args = parser.parse_args()
 
     if args.add:
@@ -341,18 +431,47 @@ def main():
     if args.accounts != "all":
         wanted = [x.strip() for x in args.accounts.split(",")]
         accounts = [a for a in accounts if a.get("label") in wanted]
+    if args.limit > 0:
+        accounts = accounts[: args.limit]
 
     actions = [a.strip() for a in args.actions.split(",") if a.strip()]
+    human = Human({}, seed=args.seed)
+
+    jitter = 0.0 if args.no_jitter else human.run_jitter()
+    if jitter > 0:
+        print(f"  [HUMAN] start jitter {jitter:.0f}s")
+        human.sleep(jitter)
 
     runs = args.loop if args.loop > 0 else 1
-    for run in range(1, runs + 1):
-        print(f"\n{'='*50}\nRUN {run}/{runs} — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n{'='*50}")
-        for acc in accounts:
-            process_account(acc, actions)
-            time.sleep(1)
-        if run < runs:
-            print(f"\n  Sleeping {args.interval}s before next run...")
-            time.sleep(args.interval)
+    tee = RunTee(os.path.join(DATA_DIR, "last-run.txt"))
+    sys.stdout = tee
+    summary = {"ok": 0, "error": 0, "balance": 0.0, "claimed": 0}
+    try:
+        for run in range(1, runs + 1):
+            print(f"\n{'='*50}\nRUN {run}/{runs} — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n{'='*50}")
+            for idx, acc in enumerate(accounts):
+                res = process_account(acc, actions, human=human, read_only=args.status)
+                if res.get("status") in ("ok", "state"):
+                    summary["ok"] += 1
+                    bal = res.get("balance")
+                    if isinstance(bal, (int, float)):
+                        summary["balance"] += bal
+                    if res.get("results"):
+                        summary["claimed"] += sum(1 for v in res["results"].values() if v == "ok")
+                elif res.get("status") == "error":
+                    summary["error"] += 1
+                if idx < len(accounts) - 1 and not args.status:
+                    gap = human.account_stagger()
+                    print(f"    [HUMAN] next account in {gap:.0f}s")
+                    human.sleep(gap)
+            if run < runs:
+                print(f"\n  Sleeping {args.interval}s before next run...")
+                time.sleep(args.interval)
+    finally:
+        print(f"\n{'='*50}\nSUMMARY: {summary['ok']} akun ok, {summary['error']} error, "
+              f"{summary['claimed']} aksi claimed, total balance {summary['balance']:.6f} LUXA\n{'='*50}")
+        title = f"LUXA Ecosystem - {', '.join(actions)}, {len(accounts)} akun"
+        tee.close(title, {"actions": actions, "accounts": [a.get('label') for a in accounts], "summary": summary})
 
 
 if __name__ == "__main__":

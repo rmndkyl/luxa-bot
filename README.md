@@ -1,152 +1,158 @@
 # LUXA Ecosystem — Telegram Mining Bot
 
-Auto-farm LUXA (Cosmos L1 chain `luxa-1`) via Telegram Mini App. Multi-account mining, daily bonus, X task rewards, and airdrop claims.
+Auto-farm LUXA (Cosmos L1 chain `luxa-1`) via Telegram Mini App. Multi-account mining, daily bonus, **weekly drop**, X task rewards, and airdrop claims — with a humanization layer so the fleet doesn't look like a fleet.
 
 ## Overview
 
 | Item | Detail |
 |---|---|
-| **Chain** | Cosmos L1 `luxa-1` (mainnet live) |
-| **Token** | LUXA + SHARD |
+| **Chain** | Cosmos L1 `luxa-1` (mainnet live sejak 8 Okt 2026) |
+| **Token** | LUXA (hard cap 1.002.500.000) + SHARD (10.006.000.000.000) |
 | **Backend** | `luxaecosystem.alwaysdata.net/api` |
 | **Auth** | Telegram WebApp `tma {initData}` |
 | **Cost** | FREE (Rp 0, no deposit) |
-| **Score** | 55/100 — FREE script tier |
+| **TGE** | **Tidak ada** — tanpa token sale, tanpa listing eksternal |
+| **Score** | 55/100 — FREE script tier (Rp 65.000) |
+
+Riset lengkap TGE / roadmap / tokenomics / fundraise: [`docs/RESEARCH-2026-11-15.md`](docs/RESEARCH-2026-11-15.md).
+
+## Reality check — baca ini dulu
+
+Angka dari `/state` akun nyata, 15 Nov 2026:
+
+```
+miningRateHr   = 1e-08 LUXA/jam   ->  ~0.00000024 LUXA per 24 jam
+balance        = 5.0001 LUXA      (5.0 dari welcome airdrop)
+daysMined      = 1 / 60
+activePioneers = 2.481 / 7.000.000
+lockReason     = "60 mining days required and account KYC verification"
+```
+
+- **Mining menghasilkan ~nol.** 1 LUXA dari mining saja ≈ 11.400 tahun pada rate ini.
+- Reward yang benar-benar masuk: **welcome 5 LUXA** (sekali) + daily 0,00005 LUXA/hari.
+- **Weekly drop 5 LUXA ditolak untuk akun biasa** — `[WEEKLY] User is not an active Validator Ambassador.` State menampilkan `weeklyDrop.enabled: true`, tapi klaimnya hanya untuk Validator Ambassador.
+- **Withdrawal terkunci** sampai 7 juta pioneer (sekarang 2.481 = 0,035%), plus 60 hari mining + KYC Sumsub.
+- KYC menempel ke identitas (Sumsub dedupe), jadi dari 7 akun maksimal **1** yang bisa settle.
+
+Bot ini tetap berguna karena gratis dan otomatis, tapi jangan berharap nilai finansial hari ini.
 
 ## Features
-- Multi-account mining via Telegram Mini App
-- Auto-start mining session (claims previous yield + starts new)
+
+- Multi-account mining via Telegram Mini App (`initData` auto-generated dari session Telethon)
+- Auto-start mining session (claim yield sebelumnya + mulai sesi baru)
 - Daily bonus claim
+- **Weekly drop claim** (`/ambassador/claim-weekly-drop`) — hanya untuk Validator Ambassador; akun biasa ditolak server (tetap dikirim karena murah, hasilnya dilaporkan apa adanya)
 - X (Twitter) follow reward
 - Airdrop welcome claim
 - Fibonacci streak tracking (1.00x → 3.62x)
-- Progress tracking per account (data/progress.json)
+- Humanization layer (`src/humanize.py`)
+- `--status` read-only, `--limit N`, `--no-jitter`, `--seed` untuk testing
+- Progress per akun (`data/progress.json`) + `data/last-run.txt` / `.json`
+
+## Humanization (`src/humanize.py`)
+
+LUXA mendeteksi sybil dari *perilaku* ("bots, fake clickers, duplicate accounts and coordinated farms are detected and banned automatically"), bukan cuma dari jumlah wallet. Yang diacak:
+
+| Primitif | Default | Kenapa |
+|---|---|---|
+| `run_jitter()` | 0–120 s | cron 08:00 tidak pernah meledak tepat 08:00:00 |
+| `account_stagger()` | 45–180 s antar akun | 7 akun tidak claim dalam satu menit |
+| `mission_gap()` | 6–22 s antar aksi, 15% long pause | urutan request tidak konstan |
+| `action_order()` | shuffle tiap run | `state` tetap pertama (read-only), sisanya diacak |
+
+Yang **tidak** diacak: gate yang ditegakkan server (siklus mining 24 jam, week key weekly drop). Melewati gate itu bukan humanisasi, itu kehilangan streak.
 
 ## Requirements
-- Python 3.8+
-- Telegram account(s) with valid Mini App initData
-- No API keys, no proxy required (optional)
+
+- Python 3.8+ (stdlib only untuk farming; Telethon hanya untuk generate `initData`)
+- Session Telegram per akun (`.session`, mis. dari `tg-airdrop-bot`)
+- `api_id` + `api_hash` dari my.telegram.org
 
 ## Setup
 
-### 1. Get your initData (per account)
-
-**Metode A — OTOMATIS dari session Telegram (recommended):**
-
-Kalau Anda sudah punya session `.session` Telegram (dari tg-airdrop-bot), initData digenerate otomatis tanpa buka browser:
+### 1. Generate initData (per akun)
 
 ```bash
-# Proses semua session di folder sessions/
 python src/luxa_tg.py --api-id 2040 --api-hash YOUR_API_HASH --sessions-dir sessions/
-
-# Atau satu session saja
-python src/luxa_tg.py --api-id 2040 --api-hash YOUR_API_HASH --session path/to/account.session
+# atau satu session (pakai path NATIVE Windows, bukan /c/...)
+python src/luxa_tg.py --api-id 2040 --api-hash YOUR_API_HASH --session C:/path/account.session
 ```
 
-Cara kerja: login via session → trigger Mini App launch → tangkap initData dari URL fragment → simpan ke `data/accounts.json`. initData di-refresh otomatis tiap run.
+Cara kerja: login via session → trigger Mini App launch → tangkap `initData` dari URL fragment → simpan ke `data/accounts.json`. initData LUXA expire ~24 jam, jadi regenerate sebelum run.
 
-**Metode B — Manual dari DevTools:**
+**Metode manual (DevTools):** buka web.telegram.org → @LuxaEcosystemBot → Launch Mini App → F12 → Network → filter `alwaysdata` → copy header `Authorization` (mulai `tma `) → `python src/luxa.py --add akun1 --init-data "tma ..."`.
 
-1. Buka **web.telegram.org** di browser
-2. Buka **@LuxaEcosystemBot** → Launch Mini App
-3. Tekan **F12** → **Network** tab
-4. Filter `alwaysdata` → klik request → Request Headers → salin **Authorization** (mulai `tma `)
-5. Simpan via `--add`
-
-### 2. Install
+### 2. Add accounts
 
 ```bash
-cd luxa-bot
-pip install -r requirements.txt  # (empty — stdlib only, but kept for convention)
-```
-
-### 3. Add accounts
-
-```bash
-# With full "tma " prefix (recommended)
-python src/luxa.py --add account1 --init-data "tma query_id=...&hash=..."
-
-# Or without prefix (bot adds it automatically)
-python src/luxa.py --add account1 --init-data "query_id=...&hash=..."
-
-# With optional proxy
-python src/luxa.py --add account1 --init-data "tma ..." --proxy "http://host:port"
-```
-
-### 4. Verify accounts
-
-```bash
+python src/luxa.py --add akun1 --init-data "tma query_id=...&hash=..."
 python src/luxa.py --list
 ```
 
-## Usage
-
-### Single run (all accounts, all actions)
+### 3. Jalan
 
 ```bash
+# Semua akun, semua aksi (mining, daily, weekly, airdrop, x)
 python src/luxa.py
+
+# Read-only, tidak claim apa pun
+python src/luxa.py --status --no-jitter
+
+# Test cepat 1 akun tanpa jitter
+python src/luxa.py --accounts akun1 --limit 1 --no-jitter
 ```
 
-### Specific accounts
+## CLI flags
 
-```bash
-python src/luxa.py --accounts account1,account2
-```
-
-### Specific actions
-
-```bash
-# Just mining + daily
-python src/luxa.py --actions state,mining,daily
-
-# Just airdrop
-python src/luxa.py --actions airdrop
-```
-
-### Loop mode (for cron)
-
-```bash
-# Run every 6 hours, 4 times
-python src/luxa.py --loop 4 --interval 21600
-```
+| Flag | Fungsi |
+|---|---|
+| `--status` | baca state saja, tidak ada claim |
+| `--accounts a,b` | pilih label tertentu |
+| `--limit N` | batasi N akun pertama |
+| `--actions mining,daily,weekly,airdrop,x` | pilih aksi |
+| `--no-jitter` | matikan start jitter (untuk tes) |
+| `--seed N` | RNG deterministik (untuk tes) |
+| `--loop N --interval S` | ulang N kali |
 
 ## How Mining Works
 
-1. **Start**: `POST /start-mining {mode: normal}` starts a mining session
-2. **Yield**: Balance accrues over time (24h cycle)
-3. **Claim**: Calling `/start-mining` again credits the previous session's yield
-4. **Streak**: Fibonacci multiplier grows daily (miss a 24h cycle → resets to Day 1)
-5. **On-chain**: Use `POST /ecosystem/chain/claim-mined` to move off-chain balance to your `luxa1...` vault (manual, needs wallet)
+1. `POST /start-mining {mode: normal}` → klaim yield sesi sebelumnya + mulai sesi baru
+2. Yield bertambah menurut `miningRateHr` (saat ini 1e-08 LUXA/jam — praktis nol)
+3. Streak Fibonacci naik harian (1.00x → 3.62x); lewat 24 jam tanpa sesi → reset ke Day 1
+4. `POST /ecosystem/chain/claim-mined` → pindah saldo ke vault `luxa1...` (**terkunci**: 60 hari + KYC + 7 juta pioneer)
 
 ## Data Files
-- `data/accounts.json` — your accounts (initData) — **KEEP PRIVATE**
-- `data/progress.json` — farming progress
-- `config.json` — (optional) alternative config
 
-## Bukti run (dari bot sendiri, bukan mockup)
+- `data/accounts.json` — akun + initData — **KEEP PRIVATE**
+- `data/progress.json` — progress per akun
+- `data/last-run.txt` / `data/last-run.json` — hasil run terakhir
+
+## Hasil run (bukti)
 
 ![LUXA bot run](docs/screenshots/run.png)
 
-Kartu di atas dibaca langsung dari `data/last-run.txt` hasil run sungguhan: minig session dimulai,
-daily claim sukses, welcome airdrop diklaim. Satu akun saja (`acc01`, di-mask) karena LUXA
-mengandalkan `initData` mini app yang expired ~24 jam — `src/luxa_tg.py` yang meregenerasinya dari
-session Telegram sebelum run. Baris `[X] Connect your X profile` itu memang belum tertaut di akun
-ini, bukan error bot.
+Kartu di atas dibaca dari `data/last-run.txt` hasil run sungguhan, bukan mockup.
 
 ## Troubleshooting
-- **401 Authentication required** → initData expired. Telegram initData expires after ~24h. Jalankan ulang `luxa_tg.py` untuk generate segar.
-- **"latin-1 codec can't encode"** → initData berisi emoji unicode di username. Sudah di-fix otomatis (URL-encode payload). Kalau muncul lagi, regenerate initData.
-- **`BOT_APP_INVALID`** → short name salah. LUXA memakai short name **`luxa`** (BUKAN `app`). Default di script sudah benar; override dengan `--short-name luxa`.
-- **"No Telegram User"** → initData tidak punya user field valid — regenerate.
-- **Rate limited** → tambah `--interval` delay antar akun.
+
+- **401 Authentication required** → initData expired (~24 jam). Jalankan ulang `luxa_tg.py`.
+- **`latin-1 codec can't encode`** → username mengandung emoji. Sudah di-fix (payload di-URL-encode); kalau muncul lagi, regenerate initData.
+- **`BOT_APP_INVALID`** → short name salah; LUXA pakai **`luxa`** (bukan `app`).
+- **`sqlite3.OperationalError: unable to open database file`** → path session dikirim format MSYS (`/c/Users/...`). Pakai path native (`C:/Users/...`).
+- **`[WEEKLY] already claimed this week`** → normal; week key reset Minggu 00:00 UTC.
+- **`[STATE] rate_hr=1e-08`** → bukan error, memang rate-nya segitu.
 
 ## Disclaimer
-- Auto-farming may violate project ToS — use at your own risk.
-- LUXA not yet listed on major exchanges; value unproven.
-- Mining logic is off-chain (backend on shared hosting) — rewards subject to project terms.
+
+- Auto-farming berpotensi melanggar ToS proyek. Risiko ditanggung pengguna.
+- Tidak ada pasar untuk LUXA; nilai token belum terbukti dan kemungkinan besar nol.
+- Mining logic off-chain di shared hosting — reward tunduk pada aturan proyek.
 
 ## References
+
 - Website: https://luxaecosystem.xyz
 - Mining app: https://app.luxaecosystem.xyz
-- Chain registry: https://cosmos.directory/luxa
+- Whitepaper v3.0: https://luxaecosystem.xyz/whitepaper.html
+- KYC portal: https://luxaecosystem.xyz/kyc.html
 - Endpoint research: `~/HERMES DATA/airdrop-tracker/knowledge-graph/data/luxa-ecosystem-endpoints.md`
+- Riset proyek: `docs/RESEARCH-2026-11-15.md`

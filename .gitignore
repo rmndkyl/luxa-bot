@@ -12,3 +12,8 @@ __pycache__/
 # Logs
 logs.txt
 *.log
+docs/screenshots/private/
+data/last-run.txt
+data/last-run.json
+data/last-run-card.txt
+data/last-run-masked.txt

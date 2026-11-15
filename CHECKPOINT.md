@@ -1,52 +1,73 @@
 # LUXA Ecosystem Bot — CHECKPOINT
 
-**Status:** ✅ DIBANGUN & LIVE-VERIFIED — READY to ship
-**Tanggal:** 2026-10-30
-**Score:** 55/100 (FREE tier, Rp 65K)
+**Status:** ✅ v1.1.0 — 7 akun live-verified, cron terpasang
+**Tanggal:** 2026-11-15
+**Score:** 55/100 (FREE tier, Rp 65.000) · katalog `scripts` id 1847, v1.1.0
 
-## Done (terverifikasi)
-- [x] Endpoint trace lengkap → `~/HERMES DATA/airdrop-tracker/knowledge-graph/data/luxa-ecosystem-endpoints.md`
-- [x] `src/luxa.py` — client mining + CLI (state, mining, daily, x, airdrop, booster, convert, wallet bind, chain claim)
-- [x] `src/luxa_tg.py` — auto-generate initData via Telethon (tanpa browser)
-- [x] Live test AKUN REAL @janisuhendi77:
-  - [x] auto-initData berhasil (470 char, fragment `#tgWebAppData`)
-  - [x] `[STATE] balance=0 shards=0 streak=1d mining_active=False` (auth diterima server)
-  - [x] `[MINING] session claimed/started` (mining berjalan)
-  - [x] `[DAILY] claimed ok` (daily bonus diklaim)
-- [x] Unicode header fix (URL-encode payload — emoji di username)
-- [x] Short name `luxa` dikonfirmasi (bukan `app`)
-- [x] README.md lengkap (Metode A auto / B manual, troubleshooting)
-- [x] .gitignore benar (accounts.json, progress.json, config.json aman)
-- [x] Git push: layerairdrop/luxa-bot (PRIVATE) + rmndkyl/luxa-bot (PUBLIC)
-- [x] Katalog: lyid-scripts/index.md + README.md (bot #6, Rp 65K, pushed)
-- [x] Knowledge graph: projects.md + luxa-ecosystem-endpoints.md
+## Riset proyek (ringkas — detail di `docs/RESEARCH-2026-11-15.md`)
 
-## Not verified / belum dilakukan
-- [ ] Mining yield aktual BELUM terukur (session baru, balance=0). Perlu 1-2 siklus 24h untuk tahu rate reward nyata.
-- [ ] Wallet bind on-chain (`/ecosystem/wallet/bind`) BELUM di-test — butuh buat/import `luxa1...` vault manual
-- [ ] Claim on-chain (`/ecosystem/chain/claim-mined`) BELUM di-test — perlu wallet terbind
-- [ ] Booster + ad reward (Monetag) BELUM di-test — butuh ad SDK
-- [ ] Multi-account (7 session) BELUM full-run — hanya 1 akun (@janisuhendi77) terverifikasi
-- [ ] referral chain farming BELUM di-setup (ref_{telegram_id})
+- **TGE: tidak ada.** Tanpa token sale, tanpa listing. Supply LUXA full-minted di genesis (1.002.272.168,58 dari cap 1.002.500.000).
+- **Roadmap:** Ph1 genesis (jalan) → Ph2 IBC/LDEX/vault (aktif) → **Ph3 gerbang 7 juta pioneer** → Ph4 governance + CEX listing (tanpa tanggal).
+- **Tokenomics:** LUXA cap 1.002.500.000 (50% mining vault / 50% Council 3-of-5), SHARD 10.006 M (10.000:1, migrasi pending), fee withdrawal 8%/4%.
+- **Fundraise: tidak ada.** DoraHacks 2 follower, backend AlwaysData shared hosting.
+- **Environment:** block 217.785, 9+ validator, bonded ~12,3 jt LUXA, **activePioneers 2.481 / 7.000.000 (0,035%)**, grup TG 1.756, channel resmi 2 post.
+- **Inkonsistensi proyek:** klaim multisig 3-of-5 vs pengakuan DoraHacks "single-key today"; klaim "7M+ miners" vs 2.481; "halving emission" vs supply full-minted.
+
+## Ekonomi nyata (terukur, bukan asumsi)
+
+```
+/state akun @janisuhendi77:
+  miningRateHr = 1e-08 LUXA/jam      -> 0,00000024 LUXA / 24 jam
+  daily bonus  = +0,00005 LUXA
+  weekly drop  = DITOLAK ("User is not an active Validator Ambassador")
+  daysMined    = 1 / 60
+  lockReason   = "60 mining days required and account KYC verification"
+```
+
+- Satu-satunya reward nyata: **welcome airdrop 5 LUXA** (sekali per akun).
+- `weeklyDrop.enabled=true, amountLuxa=5` di `/state` itu **jebakan** — endpoint klaim hanya untuk Validator Ambassador.
+- Withdrawal butuh 60 hari + KYC Sumsub + 7 juta pioneer. KYC dedupe = dari 7 akun maksimal 1 yang bisa settle.
+- **Nilai hari ini ≈ nol.** Dijalankan karena gratis.
+
+## Done (terverifikasi 15 Nov 2026)
+
+- [x] Riset lengkap TGE/roadmap/tokenomics/fundraise → `docs/RESEARCH-2026-11-15.md`
+- [x] `src/humanize.py` — run_jitter 0–120 s, account_stagger 45–180 s, mission_gap 6–22 s + long pause, action_order shuffle
+- [x] `src/luxa.py` — aksi `weekly`, flag `--status/--limit/--no-jitter/--seed`, re-read state, ringkasan total
+- [x] 7 akun initData fresh dari session Telethon (janisuhendi77, jelkisirvu, borakori, idoynira, kalseyerba, losdagacitu, sonaanikar2)
+- [x] `--status` 7/7 OK
+- [x] **Run penuh 7 akun: `7 akun ok, 0 error, 20 aksi claimed, total balance 35.000450 LUXA`** (1690 s, humanized)
+- [x] `data/last-run.txt` + `.json` dari run nyata
+- [x] Screenshot: `docs/screenshots/run.png` (acc01–acc07, terverifikasi vision) + `docs/screenshots/private/run-full.png` (beda byte, private lebih besar)
+- [x] `tools/render_card.py` (viewport 4000 — versi skill clip di 900 px dan memotong SUMMARY)
+- [x] Cron `luxa-daily` (no_agent, `10 10 * * *`, deliver local) → `~/AppData/Local/hermes/scripts/luxa_daily.py`
+- [x] Katalog `scripts` id 1847 → v1.1.0
+- [x] README ditulis ulang (reality check di atas, tabel humanisasi, CLI flags, troubleshooting)
+
+## Belum / sengaja tidak dilakukan
+
+- [ ] Wallet bind on-chain — tidak berguna sebelum 7 juta pioneer, dan mengikat 7 wallet ke 1 identitas memperjelas pola
+- [ ] Zealy quest — user prefer manual di website
+- [ ] Booster/ad reward (Monetag) — butuh SDK ad, hasilnya ~0
+- [ ] KYC — hanya 1 identitas bisa lolos, tidak layak untuk proyek bernilai nol
 
 ## Resume
-1. Generate initData semua session:
-   ```
-   python src/luxa_tg.py --api-id 2040 --api-hash <HASH> --sessions-dir sessions/
-   ```
-2. Jalankan mining semua akun:
-   ```
-   python src/luxa.py --actions state,mining,daily
-   ```
-3. Pantau reward setelah 24h (cek `/state` balance)
 
-## Next actions
-- [ ] Setup referral chain: main account dulu → semua alt pakai ref_{main_id}
-- [ ] (Opsional) Wallet bind + claim on-chain — manual, butuh buat vault luxa1
-- [ ] (Opsional) Cron 24h untuk auto-mining
-- [ ] (Opsional) Buat showcase README di public repo kalau ingin dipromosikan lebih
+```bash
+cd C:/Users/raman/LYID-BOTS/luxa-bot
+python src/luxa.py --status --no-jitter     # cek state 7 akun
+python src/luxa.py                          # daily penuh (±28 menit, humanized)
+python src/luxa_tg.py --api-id 2040 --api-hash <HASH> --session C:/path/x.session   # refresh 1 akun
+```
 
-## Pelajaran yang perlu diaudit skill
-- Auto-initData Telethon → `endpoint-hunter/references/telethon-auto-initdata-pattern.md` ✓
-- Checklist TWA mining → `script-architect/references/twa-mining-bot-checklist.md` ✓
-- MEMORY.md endpoint-hunter + memory profile ✓
+## Next actions (kalau mau lanjut)
+
+- [ ] Cek ulang `activePioneers` tiap bulan; kalau naik signifikan, evaluasi lagi
+- [ ] Kalau proyek buka weekly drop untuk non-ambassador, tambahkan `weekly` ke default actions
+- [ ] Kalau 60 hari tercapai (≈ Jan 2027), cek `/ecosystem/kyc/status` untuk akun utama saja
+
+## Pelajaran yang perlu masuk skill
+
+- Endpoint klaim bisa **gated** walau `/state` bilang `enabled: true` → selalu coba klaim 1x sebelum menulis klaim reward di README (kasus weekly drop LUXA)
+- `render-card.py` bawaan skill: viewport 900 px memotong log panjang; salin + naikkan ke 4000 sebelum render run multi-akun
+- Path session Telethon harus NATIVE (`C:/...`), bukan MSYS (`/c/...`) — kalau tidak, `sqlite3.OperationalError: unable to open database file`
