@@ -1,4 +1,27 @@
-# LUXA Ecosystem — Telegram Mining Bot
+# Luxa Bot
+
+**Versi:** 1.0.0 · **Harga:** Rp 65.000 (~$4) · **Kontak pembelian:** [@rmndkyl](https://t.me/rmndkyl)
+
+Auto-farm LUXA (Cosmos L1) lewat Telegram Mini App: mining multi-akun, daily bonus, weekly drop, task X, dan claim airdrop \u2014 plus lapisan humanisasi supaya pola akun tidak seragam. Proyek gratis, tanpa setoran.
+
+## Kebutuhan
+
+| Item | Detail |
+|---|---|
+| Runtime | Python 3.10+ |
+| Wallet | EVM / sesuai chain proyek (kamu sendiri) |
+| Proxy | tidak perlu |
+| Captcha | tidak perlu |
+| Akses | akun proyek yang kamu kelola sendiri |
+
+## Pembayaran
+
+E-Wallet: DANA / GoPay / ShopeePay · Bank: BCA / Seabank · Crypto: contact for wallet address.
+Pembeli menghubungi [@rmndkyl](https://t.me/rmndkyl), kirim bukti transfer, lalu terima license key.
+
+---
+
+![LUXA bot run](docs/screenshots/run.png)
 
 Auto-farm LUXA (Cosmos L1 chain `luxa-1`) via Telegram Mini App. Multi-account mining, daily bonus, **weekly drop**, X task rewards, and airdrop claims — with a humanization layer so the fleet doesn't look like a fleet.
 
@@ -13,8 +36,6 @@ Auto-farm LUXA (Cosmos L1 chain `luxa-1`) via Telegram Mini App. Multi-account m
 | **Cost** | FREE (Rp 0, no deposit) |
 | **TGE** | **Tidak ada** — tanpa token sale, tanpa listing eksternal |
 | **Score** | 55/100 — FREE script tier (Rp 65.000) |
-
-Riset lengkap TGE / roadmap / tokenomics / fundraise: [`docs/RESEARCH-2026-11-15.md`](docs/RESEARCH-2026-11-15.md).
 
 ## Reality check — baca ini dulu
 
@@ -129,7 +150,6 @@ python src/luxa.py --accounts akun1 --limit 1 --no-jitter
 
 ## Hasil run (bukti)
 
-![LUXA bot run](docs/screenshots/run.png)
 
 Kartu di atas dibaca dari `data/last-run.txt` hasil run sungguhan, bukan mockup.
 
@@ -138,7 +158,6 @@ Kartu di atas dibaca dari `data/last-run.txt` hasil run sungguhan, bukan mockup.
 - **401 Authentication required** → initData expired (~24 jam). Jalankan ulang `luxa_tg.py`.
 - **`latin-1 codec can't encode`** → username mengandung emoji. Sudah di-fix (payload di-URL-encode); kalau muncul lagi, regenerate initData.
 - **`BOT_APP_INVALID`** → short name salah; LUXA pakai **`luxa`** (bukan `app`).
-- **`sqlite3.OperationalError: unable to open database file`** → path session dikirim format MSYS (`/c/Users/...`). Pakai path native (`C:/Users/...`).
 - **`[WEEKLY] already claimed this week`** → normal; week key reset Minggu 00:00 UTC.
 - **`[STATE] rate_hr=1e-08`** → bukan error, memang rate-nya segitu.
 
